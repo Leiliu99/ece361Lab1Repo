@@ -9,6 +9,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <sys/time.h>
+#include <sys/resource.h>
 
 #define MAXBUFLEN 100
 int main(int argc, char** argv){
@@ -37,10 +38,17 @@ int main(int argc, char** argv){
     char userInputFTP[MAXBUFLEN];
     scanf("%s", userInputFTP);
     scanf("%s", userInputFile);
-    struct timeval stop, start;
+    //struct timeval stop, start;
+    struct rusage usage;
+    struct timeval start, end;
+    double timeStart, timeEnd, totalTime;
+
     if(access(userInputFile, F_OK) != -1){
         if(strcmp(userInputFTP, msg) == 0){
-            gettimeofday(&start, NULL);
+            //gettimeofday(&start, NULL);
+            getrusage(RUSAGE_SELF, &usage);
+            start = usage.ru_utime;
+            timeStart = start.tv_usec;
             if(sendto(socketfd, msg, MAXBUFLEN-1, 0, servinfo->ai_addr, servinfo->ai_addrlen) == -1){
                 return 0;
             }
@@ -61,9 +69,13 @@ int main(int argc, char** argv){
 
     char desiredMessage[] = "yes";
     if(strcmp(buf, desiredMessage) == 0){//if the message is "yes" print out "A file transfer can start"
-        gettimeofday(&stop, NULL);
+        //gettimeofday(&stop, NULL);
+        getrusage(RUSAGE_SELF, &usage);
+        end = usage.ru_utime;
+        timeEnd = end.tv_usec;
 
-        printf("took %lu us\n", (stop.tv_sec - start.tv_sec) * 1000000 + stop.tv_usec - start.tv_usec);
+        //printf("took %lu us\n", (stop.tv_sec - start.tv_sec) * 1000000 + stop.tv_usec - start.tv_usec);
+        printf("%d microseconds\n", (int)(timeEnd-timeStart));
         printf("A file transfer can start.\n");
     }else{//exit the program
         return 0;
