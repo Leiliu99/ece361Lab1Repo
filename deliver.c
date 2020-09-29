@@ -33,6 +33,8 @@ int main(int argc, char** argv){
         return 0;
     }
 
+
+    printf("Wait for user input:");
     //check if file exist sned message "ftp" to server
     char userInputFile[MAXBUFLEN];
     char userInputFTP[MAXBUFLEN];
@@ -50,34 +52,37 @@ int main(int argc, char** argv){
             start = usage.ru_utime;
             timeStart = start.tv_usec;
             if(sendto(socketfd, msg, MAXBUFLEN-1, 0, servinfo->ai_addr, servinfo->ai_addrlen) == -1){
+                printf("Unable to send message to server. Quit the program\n");
                 return 0;
             }
         }else{
             if(sendto(socketfd, userInputFTP, MAXBUFLEN-1, 0, servinfo->ai_addr, servinfo->ai_addrlen) == -1){
+                printf("Unable to send message to server. Quit the program\n");
                 return 0;
             }
         }
     }else{
+        printf("the file name input does not exist\n");
         return 0;
     }
 
     //receive a message from the server
     if(recvfrom(socketfd, buf, MAXBUFLEN - 1, 0,(struct sockaddr *)&their_addr, &addr_len) == -1){//receive a message from server
+        printf("Unable to recieve from server. Quit the program\n");
         return 0;
     }
-    //printf("[debug]%s.\n", buf);
 
     char desiredMessage[] = "yes";
     if(strcmp(buf, desiredMessage) == 0){//if the message is "yes" print out "A file transfer can start"
-        //gettimeofday(&stop, NULL);
+        printf("Recieved yes from server\n");
         getrusage(RUSAGE_SELF, &usage);
         end = usage.ru_utime;
         timeEnd = end.tv_usec;
 
-        //printf("took %lu us\n", (stop.tv_sec - start.tv_sec) * 1000000 + stop.tv_usec - start.tv_usec);
         printf("%d microseconds\n", (int)(timeEnd-timeStart));
         printf("A file transfer can start.\n");
     }else{//exit the program
+        printf("Recieved no from server\n");
         return 0;
     }
     return 0;

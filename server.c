@@ -36,6 +36,7 @@ int main(int argc, char** argv){
     //create a UDP socket
     socketfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);//a socket descriptor
     if(socketfd == -1){
+        printf("Unable to build the socket. Quit the program\n");
         return 0;
     }
 
@@ -43,28 +44,32 @@ int main(int argc, char** argv){
     if(bind(socketfd, res->ai_addr, res->ai_addrlen) == -1){
         return 0;
     }
-
+    printf("Waiting for deliver's message.\n");
     addr_len = sizeof(their_addr);
     int numbytes;
     if((numbytes = recvfrom(socketfd, buf, MAXBUFLEN - 1, 0,(struct sockaddr *)&their_addr, &addr_len)) == -1){//receive a message from client
+        printf("Unable to receive from deliver. Quit the program\n");
         return 0;
     }
 
-
+    printf("Recieve the message from deliver: %s.\n", buf);
     char desiredMessage[] = "ftp";
     if(strcmp(buf, desiredMessage) == 0){//if the message is "ftp" reply yes
         if(sendto(socketfd, "yes", 3, 0, (struct sockaddr *)&their_addr, addr_len) == -1){
-            printf("hereeee");
+            printf("Unable to send message back to deliver. Quit the program\n");
             return 0;
         }
+        printf("Message contains ftp: send yes to user.\n");
     }else{//reply no otherwise
         if(sendto(socketfd, "no", 2, 0,(struct sockaddr *)&their_addr, addr_len) == -1){
+            printf("Unable to send message back to deliver. Quit the program\n");
             return 0;
         }
+        printf("Message does not contain ftp: send no to user.\n");
     }
 
     freeaddrinfo(res); //avoid memory leak
     close(socketfd);//close the socket
     return 0;
-    //ug180.eecg.toronto.edu,128.100.13.180 ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBJgtxmKZcFTKbPgxsUqE0bWGO7o3XQfmOz023KvotBGznGE2IXJpgxeAIW7vKWtzVfw6O5D3oxR2cAgUS6ualYA=
+
 }
