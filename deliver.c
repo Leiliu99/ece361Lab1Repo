@@ -21,7 +21,7 @@ int main(int argc, char** argv){
     socklen_t addr_len;
 
     // first, load up address structs with getaddrinfo():
-    memset(&hints, 0, sizeof hints);
+    memset(&hints, 0, sizeof hints);//zero out the structure
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_DGRAM;
 
@@ -30,6 +30,7 @@ int main(int argc, char** argv){
     //create a UDP socket
     socketfd = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);//a socket descriptor
     if(socketfd == -1){
+	printf("Unable to build the socket with given address and port number. Quit the program\n");
         return 0;
     }
 
@@ -65,7 +66,7 @@ int main(int argc, char** argv){
         printf("the file name input does not exist\n");
         return 0;
     }
-
+    printf("Waiting for server's response...\n");
     //receive a message from the server
     if(recvfrom(socketfd, buf, MAXBUFLEN - 1, 0,(struct sockaddr *)&their_addr, &addr_len) == -1){//receive a message from server
         printf("Unable to recieve from server. Quit the program\n");
