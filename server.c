@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
@@ -9,8 +10,39 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
-#define MAXBUFLEN 100
+#define MAXBUFLEN 1500
 
+
+
+struct packet{
+    unsigned int total_frag; //total number of fragments
+    unsigned int frag_no; //sequence number of the fragment
+    unsigned int size; //size of the data
+    char* filename; //file name
+    char filedata[1000]; //actual data within the file
+};
+
+void stringTostruct(struct packet* packetFile, char* messageString){
+     char *token = strtok(messageString, ":");
+     int counter = 0;
+    while (token != NULL)
+    {
+        if(counter == 0){
+            packetFile->total_frag = atoi(token);
+        }else if(counter == 1){
+            packetFile->frag_no = atoi(token);
+        }else if(counter == 2){
+            packetFile->size = atoi(token);
+        }else if(counter == 3){
+            packetFile->filename = token;
+        }else{
+            memmove(packetFile->filedata, token, packetFile->size);
+        }
+        token = strtok(NULL, ":");
+        counter++;
+    }
+    return;
+}
 
 int main(int argc, char** argv){
     int socketfd;
@@ -47,27 +79,40 @@ int main(int argc, char** argv){
     printf("Waiting for deliver's message.\n");
     addr_len = sizeof(their_addr);
     int numbytes;
-    if((numbytes = recvfrom(socketfd, buf, MAXBUFLEN - 1, 0,(struct sockaddr *)&their_addr, &addr_len)) == -1){//receive a message from client
-        printf("Unable to receive from deliver. Quit the program\n");
-        return 0;
-    }
-
-    printf("Recieve the message from deliver: %s.\n", buf);
-    char desiredMessage[] = "ftp";
-    if(strcmp(buf, desiredMessage) == 0){//if the message is "ftp" reply yes
-        if(sendto(socketfd, "yes", 3, 0, (struct sockaddr *)&their_addr, addr_len) == -1){
-            printf("Unable to send message back to deliver. Quit the program\n");
+    bool continueReceive = true;
+    FILE* fp;
+    while(continueReceive){
+        if((numbytes = recvfrom(socketfd, buf, MAXBUFLEN - 1, 0,(struct sockaddr *)&their_addr, &addr_len)) == -1){//receive a message from client
+            printf("Unable to receive from deliver. Quit the program\n");
             return 0;
         }
-        printf("Message contains ftp: send yes to user.\n");
-    }else{//reply no otherwise
-        if(sendto(socketfd, "no", 2, 0,(struct sockaddr *)&their_addr, addr_len) == -1){
-            printf("Unable to send message back to deliver. Quit the program\n");
+        buf[numbytes] = '\0';
+        struct packet receivedpacketFile;
+        stringTostruct(&receivedpacketFile, buf);
+        printf("Recieve the message from deliver, seq#: %d\n", receivedpacketFile.frag_no);
+        char filePrefix[100] = "serverCreated";
+        char* fileNameBefore = receivedpacketFile.filename;
+        //printf("check file name, %s\n", fileNameBefore);
+        strcat(filePrefix, fileNameBefore);
+        //printf("check, %s\n", filePrefix);
+        fp = fopen(filePrefix, "w");
+        //printf("check data: \n");
+        for(int i = 0; i < receivedpacketFile.size; i++){
+            fputc(receivedpacketFile.filedata[i], fp);
+            //printf("%c", receivedpacketFile.filedata[i]);
+        }
+        //printf("\n");
+        if(sendto(socketfd, "ACK", 3, 0,(struct sockaddr *)&their_addr, addr_len) == -1){
+            printf("Unable to send ACK number back to deliver. Quit the program\n");
             return 0;
         }
-        printf("Message does not contain ftp: send no to user.\n");
-    }
+        printf("sent ACK\n");
+        if(receivedpacketFile.total_frag == receivedpacketFile.frag_no){//EOF the file reached
+            continueReceive = false;
+        }
 
+    }
+    fclose(fp);
     freeaddrinfo(res); //avoid memory leak
     close(socketfd);//close the socket
     return 0;
