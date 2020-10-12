@@ -27,7 +27,7 @@ void read_file(unsigned char **dataArray, int *fileSize, char *fileName);
 //add required information to the packet
 void add_info_to_packet(struct packet* filePacket, int total_frag, int frag_no, int size, char* filename);
 //transfer the struct packet to string format
-structTostring(struct packet packetFile, char* messageString);
+size_t structTostring(struct packet packetFile, char* messageString);
 
 int main(int argc, char** argv){
     int socketfd;
