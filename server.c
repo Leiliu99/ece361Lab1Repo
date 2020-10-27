@@ -29,6 +29,7 @@ int main(int argc, char** argv){
     //char buf[MAXBUFLEN];
     struct sockaddr_storage their_addr;
     socklen_t addr_len;
+    int receivedSeq = 0;
 
     // first, load up address structs with getaddrinfo():
     memset(&hints, 0, sizeof hints);//zero out the structure
@@ -70,26 +71,32 @@ int main(int argc, char** argv){
         struct packet receivedpacketFile;
         printf("numbytes size, %d\n", numbytes);
         stringTostruct(&receivedpacketFile, buf, numbytes);
-        printf("Recieve the message from deliver, seq#: %d, and package size is: %d\n", receivedpacketFile.frag_no, receivedpacketFile.size);
-        if(firstTransmit){
-            char filePrefix[100] = "serverCreated";
-            char* fileNameBefore = receivedpacketFile.filename;
-            printf("check file name, %s\n", fileNameBefore);
-            strcat(filePrefix, fileNameBefore);
-            printf("check, %s\n", filePrefix);
-            fp = fopen(filePrefix, "wb");
-            firstTransmit = false;
+        if(receivedSeq == receivedpacketFile.frag_no){
+            printf("Recieve the message from deliver, seq#: %d, dupliacate packet, drop this packet\n", receivedpacketFile.frag_no);
+        }else{
+            printf("Recieve the message from deliver, seq#: %d, and package size is: %d\n", receivedpacketFile.frag_no, receivedpacketFile.size);
+            receivedSeq = receivedpacketFile.frag_no;
+            if(firstTransmit){
+                char filePrefix[100] = "serverCreated";
+                char* fileNameBefore = receivedpacketFile.filename;
+                printf("check file name, %s\n", fileNameBefore);
+                strcat(filePrefix, fileNameBefore);
+                printf("check, %s\n", filePrefix);
+                fp = fopen(filePrefix, "wb");
+                firstTransmit = false;
+            }
+            //printf("package content, %s\n", receivedpacketFile.filedata);
+            fwrite(receivedpacketFile.filedata , 1 , receivedpacketFile.size , fp);
+            if(sendto(socketfd, "ACK", 3, 0,(struct sockaddr *)&their_addr, addr_len) == -1){
+                printf("Unable to send ACK number back to deliver. Quit the program\n");
+                return 0;
+            }
+            printf("sent ACK\n");
+            if(receivedpacketFile.total_frag == receivedpacketFile.frag_no){//EOF the file reached
+                continueReceive = false;
+            }
         }
-        //printf("package content, %s\n", receivedpacketFile.filedata);
-        fwrite(receivedpacketFile.filedata , 1 , receivedpacketFile.size , fp);
-        if(sendto(socketfd, "ACK", 3, 0,(struct sockaddr *)&their_addr, addr_len) == -1){
-            printf("Unable to send ACK number back to deliver. Quit the program\n");
-            return 0;
-        }
-        printf("sent ACK\n");
-        if(receivedpacketFile.total_frag == receivedpacketFile.frag_no){//EOF the file reached
-            continueReceive = false;
-        }
+
     }
     fclose(fp);
 

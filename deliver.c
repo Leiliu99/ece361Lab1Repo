@@ -11,9 +11,12 @@
 #include <netdb.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+#include <math.h>
 
 #define MAXBUFLEN 1500
 #define FRAG_SIZE 1000
+#define Alpha 0.125
+#define Beta 0.25
 struct packet{
     unsigned int total_frag; //total number of fragments
     unsigned int frag_no; //sequence number of the fragment
@@ -33,15 +36,18 @@ int main(int argc, char** argv){
     struct timeval RTO;
     RTO.tv_sec = 1;// initial setup before the first RTT measurement
     RTO.tv_usec = 0;
-    struct timeval SRTT;
-    SRTT.tv_sec =0;
-    SRTT.tv_usec =0;
-    struct timeval RTTVAR;
-    RTTVAR.tv_sec =0;
-    RTTVAR.tv_usec =0;
-    struct timeval RTT;
-    RTT.tv_sec =0;
-    RTT.tv_usec =0;
+//    struct timeval SRTT;
+//    SRTT.tv_sec =0;
+//    SRTT.tv_usec =0;
+//    struct timeval RTTVAR;
+//    RTTVAR.tv_sec =0;
+//    RTTVAR.tv_usec =0;
+//    struct timeval RTT;
+//    RTT.tv_sec =0;
+//    RTT.tv_usec =0;
+    double estimateRTT = 7.0;
+    double devRTT = 0.0;
+    double sampleRTT = 0.0;
     int socketfd;
     char msg[] = "ftp";
     struct addrinfo hints, *servinfo;
@@ -117,10 +123,9 @@ int main(int argc, char** argv){
                 bool recievedAck = false;
                 //printf("sending message: %s, and message size: %d\n", messageString, messageSize);
                 printf("sending package: %d, package size: %d\n", sequenceNumber, messageSize);
-                if (setsockopt(socketfd, SOL_SOCKET, SO_RCVTIMEO,(const char*)&RTO ,sizeof(RTO)) == 0) {
-                    printf("Set the retransmission timeout: %d, %d\n", RTO.tv_sec, RTO.tv_usec);
-                }
-                else{
+                if (setsockopt(socketfd, SOL_SOCKET, SO_RCVTIMEO,(const char*)&RTO ,sizeof(RTO)) == 0){
+                    printf("Set the retransmission timeout: sec: %ld, usec: %d\n", RTO.tv_sec, RTO.tv_usec);
+                }else{
                     printf("Unable to set time out for receiving ACK\n");
                     perror("Error");
                 }
@@ -141,7 +146,7 @@ int main(int argc, char** argv){
                     int numbytes;
                     if((numbytes = recvfrom(socketfd, buf, MAXBUFLEN - 1, 0,(struct sockaddr *)&their_addr, &addr_len)) < 0) {
                         //receive a message from server that is not true
-                        // or timeout
+                        //or timeout
                         recievedAck = false;
                         printf("Resending message: %s\n", messageString);
                         continue;
@@ -156,47 +161,18 @@ int main(int argc, char** argv){
                         end = usage.ru_utime;
                         timeEnd = end.tv_usec;
                         printf("One round is %d microseconds\n", (int) (timeEnd - timeStart));
-                        RTT.tv_usec = timeEnd - timeStart;
+                        sampleRTT = timeEnd - timeStart;
                         recievedAck = true;
-                        if (i == 0) {
-                            RTO.tv_sec = 0;
-                            SRTT = RTT;
-                            RTTVAR.tv_usec = RTT.tv_usec / (double) 2;
-//                            printf("!!!!!!!!!!RTO: %d, %d\n", RTO.tv_sec, RTO.tv_usec);
-//                            printf("!!!!!!!!!!RTTVAR: %d, %d\n", RTTVAR.tv_sec, RTTVAR.tv_usec);
-//                            printf("!!!!!!!!!!SRTT: %d, %d\n", SRTT.tv_sec, SRTT.tv_usec);
-                        }
-                        else{
-                            //printf("!!!!!!!!!!RTT: %d, %d\n", RTT.tv_sec, RTT.tv_usec);
-                            //printf("!!!!!!!!!!RTTVAR: %d, %d\n", RTTVAR.tv_sec, RTTVAR.tv_usec);
-                            //printf("!!!!!!!!!!SRTT: %d, %d\n", SRTT.tv_sec, SRTT.tv_usec);
-                            if (SRTT.tv_usec - RTT.tv_usec >0)
-                                RTTVAR.tv_usec = 0.75 * RTTVAR.tv_usec + 0.25* (SRTT.tv_usec - RTT.tv_usec);
-                            else
-                                RTTVAR.tv_usec = 0.75 * RTTVAR.tv_usec + 0.25* (RTT.tv_usec - SRTT.tv_usec);
-                            SRTT.tv_usec = 0.875 * SRTT.tv_usec + 0.125 * RTT.tv_usec;
-//                            if (i==1) {
-//                                printf("!!!!!!!!!!RTTVAR: %d, %d\n", RTTVAR.tv_sec, RTTVAR.tv_usec);
-//                                printf("!!!!!!!!!!SRTT: %d, %d\n", SRTT.tv_sec, SRTT.tv_usec);
-//                            }
-//                            if (i==2) {
-//                                printf("!!!!!!!!!!RTTVAR: %d, %d\n", RTTVAR.tv_sec, RTTVAR.tv_usec);
-//                                printf("!!!!!!!!!!SRTT: %d, %d\n", SRTT.tv_sec, SRTT.tv_usec);
-//                            }
-                        }
-
-                        RTO.tv_usec = SRTT.tv_usec + 4 * RTTVAR.tv_usec;
-//                        if (1000000 * RTO.tv_sec +  RTO.tv_usec < 1000000){
-//                            RTO.tv_sec =1;
-//                            RTO.tv_usec =0;
-//                        }
+                        devRTT = (1 - Beta) * devRTT + Beta * fabs(sampleRTT - estimateRTT);
+                        estimateRTT = (1 - Alpha) * estimateRTT + Alpha * sampleRTT;
+                        printf("this round estimated: %f\n", estimateRTT);
+                        printf("this round derivated: %f\n", devRTT);
+                        RTO.tv_sec = 0;
+                        RTO.tv_usec = estimateRTT + 4 * devRTT;
                         if (1000000 * RTO.tv_sec +  RTO.tv_usec >= 60000000){
-                            RTO.tv_sec =60;
+                            RTO.tv_sec = 60;
                             RTO.tv_usec =0;
                         }
-                        printf("!!!SRTT: %d, %d\n", SRTT.tv_sec, SRTT.tv_usec);
-                        printf("!!!RTTVAR: %d, %d\n", RTTVAR.tv_sec, RTTVAR.tv_usec);
-                        //printf("!!!!!!!!!!Set the retransmission timeout: %d, %d\n", RTO.tv_sec, RTO.tv_usec);
                         break;
                     }
                 }
