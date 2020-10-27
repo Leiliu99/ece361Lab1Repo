@@ -102,7 +102,7 @@ void stringTostruct(struct packet* packetFile, char* messageString, int messageS
     int totalFragLength;
     int fragNoLength;
     int sizeLength;
-    int fileNameLength;
+    int fileNameLength=0;
     int counter = 0;
     int currentLength = 0;
     for(int i = 0; i < messageSize; i++){
